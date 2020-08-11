@@ -1,9 +1,9 @@
-driverlib
+/driverlib/*
 *.cmd
-Debug
-targetConfig
-.launches
-.settings
+/Debug/*
+/targetConfig/*
+/.launches/*
+/.settings/*
 .ccsproject
 .cproject
 .project
