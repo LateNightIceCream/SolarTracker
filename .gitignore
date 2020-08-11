@@ -1,7 +1,7 @@
 /driverlib/*
 *.cmd
 /Debug/*
-/targetConfig/*
+/targetConfigs/*
 /.launches/*
 /.settings/*
 .ccsproject
