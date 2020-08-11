@@ -1,0 +1,33 @@
+/*
+ * clock_config.h
+ *
+ *  Created on: Jul 12, 2020
+ *      Author: zamza
+ */
+
+#ifndef HEADERS_CLOCKCONFIGURATION_H_
+#define HEADERS_CLOCKCONFIGURATION_H_
+
+#include <driverlib/MSP430F5xx_6xx/ucs.h>
+
+#define MCLK_SPEED_KHZ 8000
+#define MCLK_SPEED_MHZ MCLK_SPEED_KHZ/1000
+
+#define MCLK_SPEED_OC_KHZ 16000
+#define MCLK_SPEED_OC_MHZ MCLK_SPEED_OC_KHZ/1000
+
+#define SMCLK_SPEED_KHZ MCLK_SPEED_KHZ
+#define SMCLK_SPEED_MHZ MCLK_SPEED_MHZ
+
+// UCS
+#define FLL_REF_KHZ        32
+#define MCLK_FLLREF_RATIO  MCLK_SPEED_KHZ/FLL_REF_KHZ
+#define MCLK_FLLREF_OC_RATIO MCLK_SPEED_OC_KHZ/FLL_REF_KHZ
+
+// Times --> Cycles
+#define ONE_MS_CYCLES MCLK_SPEED_KHZ
+#define ONE_US_CYCLES MCLK_SPEED_MHZ
+
+void clock_init(void);
+
+#endif /* HEADERS_CLOCKCONFIGURATION_H_ */
