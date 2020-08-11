@@ -1,4 +1,10 @@
 driverlib
 *.cmd
 Debug
-targetConfigs
+targetConfig
+.launches
+.settings
+.ccsproject
+.cproject
+.project
+
