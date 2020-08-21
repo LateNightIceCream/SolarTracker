@@ -70,6 +70,16 @@ void i2c_port_init(void);
 #define RTC_TIMESET_IES P1IES
 #define RTC_TIMESET_BIT BIT1
 
+//////////////////////////////////
+/// RTC second input (SQ-Pin
+
+#define RTC_SEC_IN_BIT  BIT7
+#define RTC_SEC_IN_DIR  P2DIR
+#define RTC_SEC_IN_OUT  P2OUT
+#define RTC_SEC_IN_SEL  P2SEL
+#define RTC_SEC_IN_IE   P2IE
+#define RTC_SEC_IN_REN  P2REN
+
 void rtc_port_init(void);
 
 

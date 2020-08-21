@@ -25,12 +25,14 @@
 #define ELV_SET_DIRECTION_HOME STEPPER_ELV_DIR_OUT &= ~STEPPER_ELV_DIR_BIT
 #define ELV_SET_DIRECTION_SPA  STEPPER_ELV_DIR_OUT |=  STEPPER_ELV_DIR_BIT
 
-#define AZM_HOME_SWITCH_ANGLE 0
-#define ELV_HOME_SWITCH_ANGLE 40
+#define AZM_HOME_SWITCH_ANGLE 0.0
+#define ELV_HOME_SWITCH_ANGLE -47
 
-#define AZM_ANGLE_LIMIT 300.0
-#define ELV_ANGLE_LIMIT 360
+#define AZM_ANGLE_LIMIT 280
+#define ELV_ANGLE_LIMIT 360.0
 
+#define ELV_SUNRISE_ANGLE -6
+#define ELV_SUNSET_ANGLE  -6
 
 void stepper_init();
 
@@ -43,5 +45,9 @@ int elv_set_angle(double degrees);
 
 int home_azm(void);
 int home_elv(void);
+
+void azm_home_switch_isrAction();
+void elv_home_switch_isrAction();
+void home_button_isrAction();
 
 #endif /* HEADERS_STEPPER_H_ */

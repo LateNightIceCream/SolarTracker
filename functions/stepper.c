@@ -29,19 +29,17 @@
  *
  * The amount of steps to step
  *  / The timer CCRx Value
+ *  is decremented until == 0
  *
  * */
 static uint16_t azm_target_number_of_edges = 0;
 static uint16_t elv_target_number_of_edges = 0;
 
-// Count how many steps were done
-static uint16_t azm_pwm_counter = 0;
-static uint16_t elv_pwm_counter = 0;
-
-// track current angle
+// tracks current angle
 static double azm_current_angle = 0;
 static double elv_current_angle = 0;
 
+extern uint8_t interruptAction;
 
 void stepper_init() {
 
@@ -114,11 +112,6 @@ static void timer_a0_init() {
  * */
 int turn_degrees_azm(double degrees) {
 
-    // check input
-//    if(fabs(degrees) > AZM_ANGLE_LIMIT) {
-//        return 1;
-//    }
-
     if(degrees < 0 && STEPPER_AZM_LIMIT_PUSHED) {
         return 2;
     }
@@ -141,6 +134,10 @@ int turn_degrees_azm(double degrees) {
     // calculate number of pulses needed to turn the
     // desired amount of degrees
     azm_target_number_of_edges = fabs(degrees) / DEGREES_PER_STEP;
+
+    if(azm_target_number_of_edges == 0) {
+        return 2;
+    }
 
     // start continuous mode
     TA0CTL |= MC__CONTINUOUS;
@@ -175,13 +172,8 @@ int turn_degrees_azm(double degrees) {
  * */
 int turn_degrees_elv(double degrees) {
 
-    // check input
-//    if(fabs(degrees) > ELV_ANGLE_LIMIT) {
-//        return 1;
-//    }
-
     if(degrees < 0 && STEPPER_ELV_LIMIT_PUSHED) {
-        return 2;
+        return 1;
     }
 
     if(MOTOR_IS_RUNNING) {
@@ -204,6 +196,10 @@ int turn_degrees_elv(double degrees) {
     // desired amount of degrees
     elv_target_number_of_edges = fabs(degrees) / DEGREES_PER_STEP;
 
+    if(elv_target_number_of_edges == 0) {
+        return 2;
+    }
+
     // start continuous mode
     TA2CTL |= MC__CONTINUOUS;
 
@@ -215,14 +211,19 @@ int turn_degrees_elv(double degrees) {
 
 /*
  * Sets the specified angle on the azimuth plane
+ * Starts at
  * */
 int azm_set_angle(double degrees) {
 
-    if(fabs(degrees) > AZM_ANGLE_LIMIT) {
+    if(degrees > AZM_ANGLE_LIMIT) {
         return 1;
+    } else if(degrees < AZM_HOME_SWITCH_ANGLE) {
+        return 2;
     }
 
-    turn_degrees_azm(degrees-azm_current_angle);
+    if(turn_degrees_azm(degrees-azm_current_angle) == 2) {
+        return 3;
+    }
 
     azm_current_angle = degrees;
 
@@ -233,9 +234,23 @@ int azm_set_angle(double degrees) {
 
 /*
  * Sets the current angle on the elevation plane
+ * Starts
  * */
 int elv_set_angle(double degrees) {
 
+    if(degrees > ELV_ANGLE_LIMIT) {
+        return 1;
+    } else if(degrees < ELV_HOME_SWITCH_ANGLE) {
+        return 2;
+    }
+
+    if(turn_degrees_elv(degrees-elv_current_angle) == 2) {
+        return 3;
+    }
+
+    elv_current_angle = degrees;
+
+    return 0;
 
 }
 
@@ -264,7 +279,7 @@ int home_azm() {
 
     LPM3;
 
-    azm_current_angle = 0;
+    azm_current_angle = AZM_HOME_SWITCH_ANGLE;
 
     return 0;
 }
@@ -281,7 +296,7 @@ int home_elv() {
     }
 
     if(MOTOR_IS_RUNNING) {
-         return 2;
+        return 2;
     }
 
     STEPPER_ELV_WAKE;
@@ -294,9 +309,50 @@ int home_elv() {
 
     LPM3;
 
-    azm_current_angle = 0;
-
     return 0;
+}
+
+
+/*
+ * To be placed inside the PORT2 ISR
+ * */
+
+void azm_home_switch_isrAction() {
+
+    TA0CTL &= ~MC__CONTINUOUS;
+
+    P2IFG &= ~STEPPER_AZM_LIMIT_BIT;
+
+    // just for safety
+    P2IFG &= ~STEPPER_HOME_BUTTON_BIT;
+
+    azm_current_angle = AZM_HOME_SWITCH_ANGLE;
+
+    //azm_target_number_of_edges = 0;
+
+}
+
+void elv_home_switch_isrAction() {
+
+    TA2CTL &= ~MC__CONTINUOUS;
+
+    P2IFG &= ~STEPPER_ELV_LIMIT_BIT;
+
+    // just for safety
+    P2IFG &= ~STEPPER_HOME_BUTTON_BIT;
+
+    elv_current_angle = ELV_HOME_SWITCH_ANGLE;
+
+    //elv_target_number_of_edges = 0;
+
+}
+
+void home_button_isrAction() {
+
+    home_elv();
+    home_azm();
+
+    P2IFG &= ~STEPPER_HOME_BUTTON_BIT;
 }
 
 
@@ -314,87 +370,24 @@ __interrupt void timera0_isr() {
 
     if (interrupt_vector_value & 0x02) { // Interrupt source: TA0.1 CCIFG
 
-        if(++azm_pwm_counter == azm_target_number_of_edges) {
+        if(--azm_target_number_of_edges == 0) {
 
             // turn off Timer A0 to stop rotation
             TA0CTL &= ~MC_3;
 
-            azm_pwm_counter = 0;
-            azm_target_number_of_edges = 0;
-
             LPM3_EXIT;
-
 
         }
 
     } else if (interrupt_vector_value & 0x04) { // Interrupt source: TA0.2 CCIFG
 
-        if(++elv_pwm_counter == elv_target_number_of_edges) {
+        if(--elv_target_number_of_edges == 0) {
 
             // turn off Timer A2 to stop rotation
             TA2CTL &= ~MC_3;
 
-            elv_pwm_counter = 0;
-            elv_target_number_of_edges = 0;
-
-            // does this work with a single function call?
             LPM3_EXIT;
 
         }
-    }
-}
-
-
-/*
- * Handles interrupts from limit switches
- *  and home button
- *
- * */
-#pragma vector=PORT2_VECTOR
-__interrupt void port2_isr() {
-
-    uint16_t interrupt_vector_value = P2IV;
-
-    // check which pin caused the interrupt
-    if(interrupt_vector_value == 0x08) { // P2.3 --> AZM Limit Switch
-
-        TA0CTL &= ~MC__CONTINUOUS;
-
-        P2IFG &= ~STEPPER_AZM_LIMIT_BIT;
-
-        // just for safety
-        P2IFG &= ~STEPPER_HOME_BUTTON_BIT;
-
-        azm_pwm_counter = 0;
-
-        //STEPPER_AZM_SLEEP;
-
-        LPM3_EXIT;
-
-    } else if(interrupt_vector_value == 0x0E) { // P2.6 --> ELV Limit Switch
-
-        TA2CTL &= ~MC__CONTINUOUS;
-
-        P2IFG &= ~STEPPER_ELV_LIMIT_BIT;
-
-        // just for safety
-        P2IFG &= ~STEPPER_HOME_BUTTON_BIT;
-
-        elv_pwm_counter = 0;
-
-        //STEPPER_ELV_SLEEP;
-
-        LPM3_EXIT;
-
-    } else if(interrupt_vector_value == 0x04) { // P2.1 --> on-board home button
-
-        home_elv();
-
-        home_azm();
-
-
-
-        P2IFG &= ~STEPPER_HOME_BUTTON_BIT;
-
     }
 }

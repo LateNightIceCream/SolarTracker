@@ -58,6 +58,7 @@ void i2c_port_init() {
 
 void rtc_port_init() {
 
+    /// TimeSet-Button
     // Input-direction:
     RTC_TIMESET_DIR &= ~RTC_TIMESET_BIT;
 
@@ -75,6 +76,21 @@ void rtc_port_init() {
 
     // Enable Port-Interrupts
     RTC_TIMESET_IE  |= RTC_TIMESET_BIT;
+
+    /// SecondInput
+    // Input-Direction
+    RTC_SEC_IN_DIR &= ~RTC_SEC_IN_BIT;
+
+    // Select I/O
+    RTC_SEC_IN_SEL &= ~RTC_SEC_IN_BIT;
+
+    // Enable Resistor
+    RTC_SEC_IN_REN |= RTC_SEC_IN_BIT;
+
+    // Set resistor to pull-down
+    RTC_SEC_IN_OUT &= ~RTC_SEC_IN_BIT;
+
+    // Interrupts are enabled in rtc_init()
 
 }
 

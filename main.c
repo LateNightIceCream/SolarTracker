@@ -5,8 +5,14 @@
 
 #include <headers/headers.h>
 
-void spa_init();
+int spa_update();
 void interrupt_handler();
+
+#define CALCULATION_DELTA_T_DAY_MODE       800
+#define CALCULATION_DELTA_T_BEFORE_SUNRISE 1800
+#define CALCULATION_DELTA_T_NIGHT_MODE     7200
+#define CALCULATION_SUNRISE_MODE_FACTOR    1.1
+
 
 /*
  * Stores the time and date
@@ -18,24 +24,22 @@ static uint8_t time_date_array[7] = {};
  * SPA structure that holds the angular data
  * */
 static spa_data spa;
-int result;
-
-int returnVal = 0;
-
-/*
- * Keeps track of current position on both axes
- */
-static double azm_currentAngle = AZM_HOME_SWITCH_ANGLE;
-static double elv_currentAngle = ELV_HOME_SWITCH_ANGLE;
 
 /*
  * Handles actions after interrupt, see ISR
  * */
 static uint8_t interruptAction = 0;
 
-//////////////////////////////////
-/// M A I N
+/*
+ * Defines the second distance between spa calculations
+ *
+ * Is changed after sunset to go into "sleep"
+ * */
+static uint16_t calculation_delta_t = 15;
 
+/*
+ * M A I N
+ * */
 int main(void)
 {
     // Stop watchdog timer
@@ -44,46 +48,51 @@ int main(void)
 	// Global interrupt enable
 	__bis_SR_register(GIE);
 
-
-	//////////////////////////////////
-	/// Initializations
+	/*
+	 * Initialization
+	 * */
 
 	clock_init();
 	port_init();
-    //i2c_init();
-    //rtc_init();
+    i2c_init();
+    rtc_init();
     stepper_init();
-    spa_init();
 
+    // comment this line
+    // if you want to set the date/time
+    // using button P1.1
+    RTC_TIMESET_IE &= ~RTC_TIMESET_BIT;
+
+    // wait for a bit to settle
     for(int i = 0; i < 100; i++) {
-        _delay_cycles(60000); // wait to settle
+        _delay_cycles(60000);
     }
 
+    home_elv();
     home_azm();
 
-    azm_set_angle(180);
+    // debug LED
+    P1DIR |= BIT0;
+    P1SEL &= ~BIT0;
 
-    azm_set_angle(90);
-
-    azm_set_angle((180+90)/2);
-
-
-    //////////////////////////////////
-    /// Main Loop
+    /*
+     * Main Loop
+     * */
 
 	while(1) {
 
-	    LPM3;
-
 	    interrupt_handler();
+
+	    LPM3;
 
 	}
 }
 
 
-//////////////////////////////////
-/// Limit switch interrupts
-
+/*
+ * on-board push button P1.1 to set the current time and date
+ *
+ * */
 #pragma vector=PORT1_VECTOR
 __interrupt void port1_isr() {
 
@@ -102,12 +111,52 @@ __interrupt void port1_isr() {
         }
 
     }
+}
 
-    if(1) {
 
+/*
+ * Handles interrupts from limit switches
+ *  and home button as well as second counter
+ * */
+#pragma vector=PORT2_VECTOR
+__interrupt void port2_isr() {
 
-    } else if(1) {
+    uint16_t interrupt_vector_value = P2IV;
 
+    if(interrupt_vector_value == 0x10) { // every second
+
+        static uint16_t second_counter = 0;
+
+        if(MOTOR_NOT_RUNNING) {
+
+            second_counter++;
+
+            if(second_counter == calculation_delta_t) {
+
+                interruptAction = 2;
+
+                second_counter = 0;
+
+                LPM3_EXIT;
+
+            }
+        }
+
+    } else if(interrupt_vector_value == 0x08) { // P2.3 --> AZM Limit Switch
+
+        azm_home_switch_isrAction();
+
+        LPM3_EXIT;
+
+    } else if(interrupt_vector_value == 0x0E) { // P2.6 --> ELV Limit Switch
+
+        elv_home_switch_isrAction();
+
+        LPM3_EXIT;
+
+    } else if(interrupt_vector_value == 0x04) { // P2.1 --> on-board home button
+
+        home_button_isrAction();
 
     }
 }
@@ -125,12 +174,26 @@ void interrupt_handler() {
 
         case 1: // P1.1 Switch, set time/date of RTC module
 
-            //rtc_set_time_date(20, 7, 23, 21, 50, 20);
-            //rtc_get_time_date(time_date_array);
+            // year, month, day, hour, minute, second
+            rtc_set_time_date(20, 8, 21, 9, 51, 30);
+            rtc_get_time_date(time_date_array);
 
             break;
 
-        case 2: // P?.? Switch, go to home position
+        case 2: // second_counter reached calculation_delta_t
+
+            P1OUT |= BIT0;
+
+            spa_update();
+            spa_calculate(&spa);
+
+            elv_set_angle(90 - spa.zenith);
+            azm_set_angle(spa.azimuth - 90);
+
+            P1OUT &= ~BIT0;
+
+            calculation_delta_t = CALCULATION_DELTA_T_DAY_MODE;
+
             break;
 
     }
@@ -140,26 +203,33 @@ void interrupt_handler() {
 }
 
 
+
 /*
  * Initializes SPA structure
  * Has to go after rtc_init, i2c_init, etc
  *
  * */
-void spa_init() {
-   // rtc_get_time_date(time_date_array);
+int spa_update() {
 
-    spa.year          = 2000 + 20; // time_date_array[6]
-//    spa.month         = time_date_array[5];
-//    spa.day           = time_date_array[4];
-//    spa.hour          = time_date_array[2];
-//    spa.minute        = time_date_array[1];
-//    spa.second        = ;
-    spa.year = 2020;
-    spa.month = 7;
-    spa.day = 27;
-    spa.hour = 18;
-    spa.minute = 5;
-    spa.second = 20;
+    rtc_get_time_date(time_date_array);
+
+    // check format of time & date
+    if(
+        (time_date_array[0] > 60) ||
+        (time_date_array[1] > 60) ||
+        (time_date_array[2] > 24) ||
+        (time_date_array[4] > 31) || (time_date_array[4] == 0) ||
+        (time_date_array[5] > 12) || (time_date_array[5] == 0) ||
+        (time_date_array[6] > 99)
+    ) return 1;
+
+    spa.year          = 2000 + time_date_array[6];
+    spa.month         = time_date_array[5];
+    spa.day           = time_date_array[4];
+    spa.hour          = time_date_array[2];
+    spa.minute        = time_date_array[1];
+    spa.second        = time_date_array[0];
+
     spa.timezone      = 2;
     spa.delta_ut1     = 0;
     spa.delta_t       = delta_t_polynomial(spa.year-2000);

@@ -6,6 +6,7 @@
  */
 
 #include <headers/rtc.h>
+#include <headers/portConfiguration.h> // needed only for rtc_init(), maybe export
 
 static i2c_device rtc_device = {.address = RTC_SLAVE_ADDRESS};
 static i2c_data   rtc_data   = {.rx_length = 0, .tx_length = 0};
@@ -23,6 +24,9 @@ void rtc_init() {
      * */
 
     while(rtc_configure_squarewave_1hz());
+
+    // Enable second interrupt
+    RTC_SEC_IN_IE |= RTC_SEC_IN_BIT;
 
 }
 
@@ -159,8 +163,7 @@ static uint8_t bcd_to_dec(uint8_t bcdInput) {
     return bcdInput - 6 * (bcdInput >> 4);
 }
 
-//uint8_t dec_to_bcd2(uint8_t bcdInput) {
-//
+
 ////    ;------------------------------------------------------------------------------
 ////    bin2bcd;     Subroutine for converting 16 bit binary to BCD
 ////    ;              Input: R12 is 16 bit binary
