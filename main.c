@@ -8,7 +8,7 @@
 int spa_update();
 void interrupt_handler();
 
-#define CALCULATION_DELTA_T_DAY_MODE       800
+#define CALCULATION_DELTA_T_DAY_MODE       60
 #define CALCULATION_DELTA_T_BEFORE_SUNRISE 1800
 #define CALCULATION_DELTA_T_NIGHT_MODE     7200
 #define CALCULATION_SUNRISE_MODE_FACTOR    1.1
@@ -43,17 +43,17 @@ static uint16_t calculation_delta_t = 15;
 int main(void)
 {
     // Stop watchdog timer
-	WDTCTL = WDTPW | WDTHOLD;
-	
-	// Global interrupt enable
-	__bis_SR_register(GIE);
+    WDTCTL = WDTPW | WDTHOLD;
 
-	/*
-	 * Initialization
-	 * */
+    // Global interrupt enable
+    __bis_SR_register(GIE);
 
-	clock_init();
-	port_init();
+    /*
+     * Initialization
+     * */
+
+    clock_init();
+    port_init();
     i2c_init();
     rtc_init();
     stepper_init();
@@ -68,8 +68,8 @@ int main(void)
         _delay_cycles(60000);
     }
 
-    home_elv();
-    home_azm();
+//    home_elv();
+//    home_azm();
 
     // debug LED
     P1DIR |= BIT0;
@@ -79,13 +79,13 @@ int main(void)
      * Main Loop
      * */
 
-	while(1) {
+    while(1) {
 
-	    interrupt_handler();
+        interrupt_handler();
 
-	    LPM3;
+        LPM3;
 
-	}
+    }
 }
 
 
@@ -109,7 +109,6 @@ __interrupt void port1_isr() {
             LPM3_EXIT;
 
         }
-
     }
 }
 
@@ -170,6 +169,8 @@ __interrupt void port2_isr() {
 
 void interrupt_handler() {
 
+    static uint8_t sleep_flag = 1;
+
     switch(interruptAction) {
 
         case 1: // P1.1 Switch, set time/date of RTC module
@@ -187,12 +188,31 @@ void interrupt_handler() {
             spa_update();
             spa_calculate(&spa);
 
-            elv_set_angle(90 - spa.zenith);
-            azm_set_angle(spa.azimuth - 90);
+            if(spa.zenith < (90 - ELV_SUNRISE_ANGLE)) {
+                // Track mode
+                if(sleep_flag == 1) {
+                    home_azm();
+                    home_elv();
+                    calculation_delta_t = CALCULATION_DELTA_T_DAY_MODE;
+                    sleep_flag = 0;
+                }
+
+                elv_set_angle(90 - spa.zenith);
+                azm_set_angle(spa.azimuth - 90);
+
+            } else {
+                // Sleep mode
+                home_azm();
+                home_elv();
+
+                STEPPER_AZM_SLEEP;
+                STEPPER_ELV_SLEEP;
+
+                sleep_flag = 1;
+                calculation_delta_t = CALCULATION_DELTA_T_NIGHT_MODE;
+            }
 
             P1OUT &= ~BIT0;
-
-            calculation_delta_t = CALCULATION_DELTA_T_DAY_MODE;
 
             break;
 

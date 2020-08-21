@@ -135,7 +135,7 @@ int turn_degrees_azm(double degrees) {
     // desired amount of degrees
     azm_target_number_of_edges = fabs(degrees) / DEGREES_PER_STEP;
 
-    if(azm_target_number_of_edges == 0) {
+    if(azm_target_number_of_edges < 3) {
         return 2;
     }
 
@@ -196,7 +196,7 @@ int turn_degrees_elv(double degrees) {
     // desired amount of degrees
     elv_target_number_of_edges = fabs(degrees) / DEGREES_PER_STEP;
 
-    if(elv_target_number_of_edges == 0) {
+    if(elv_target_number_of_edges < 3) {
         return 2;
     }
 
