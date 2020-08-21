@@ -82,6 +82,13 @@ void i2c_port_init(void);
 
 void rtc_port_init(void);
 
+//////////////////////////////////
+/// LED
+#define CALC_LED_BIT BIT0
+#define CALC_LED_DIR P1DIR
+#define CALC_LED_OUT P1OUT
+
+void led_init(void);
 
 //////////////////////////////////
 /// Stepper Motors

@@ -4,7 +4,6 @@
  *  Created on: Jul 28, 2020
  *      Author: zamza
  *
- *
  *  The stepper driver DRV8825 has 4 relevant pins:
  *      - STEP
  *      - DIR
@@ -18,22 +17,18 @@
  *  DIR is driven by regular I/O
  *  ~SLEEP is driven by regular I/O
  *  ~RESET is not used, pulled high
- *
- *
  */
 
 #include <headers/stepper.h>
 #include <headers/portConfiguration.h>
 
 /*
- *
  * The amount of steps to step
  *  / The timer CCRx Value
  *  is decremented until == 0
- *
  * */
-static uint16_t azm_target_number_of_edges = 0;
-static uint16_t elv_target_number_of_edges = 0;
+static uint16_t azm_target_number_of_steps = 0;
+static uint16_t elv_target_number_of_steps = 0;
 
 // tracks current angle
 static double azm_current_angle = 0;
@@ -54,7 +49,6 @@ void stepper_init() {
 /*
  * Initializes TimerA0 to create a PWM Signal to drive STEP
  *  and Capture AZM and ELV STEP Signals
- *
  * */
 static void timer_a0_init() {
 
@@ -108,7 +102,6 @@ static void timer_a0_init() {
  *   when there is currently a motor running, the action
  *   is buffered by putting the controller into LPM3 and
  *   exiting on capture interrupt
- *
  * */
 int turn_degrees_azm(double degrees) {
 
@@ -121,7 +114,9 @@ int turn_degrees_azm(double degrees) {
     }
 
     if(degrees < 0)  {
+
         AZM_SET_DIRECTION_HOME;
+
     } else {
 
         if(STEPPER_AZM_LIMIT_PUSHED) {
@@ -131,11 +126,9 @@ int turn_degrees_azm(double degrees) {
         AZM_SET_DIRECTION_SPA;
     }
 
-    // calculate number of pulses needed to turn the
-    // desired amount of degrees
-    azm_target_number_of_edges = fabs(degrees) / DEGREES_PER_STEP;
+    azm_target_number_of_steps = fabs(degrees) / DEGREES_PER_STEP;
 
-    if(azm_target_number_of_edges < 3) {
+    if(azm_target_number_of_steps < 5) {
         return 2;
     }
 
@@ -168,7 +161,6 @@ int turn_degrees_azm(double degrees) {
  *   when there is currently a motor running, the action
  *   is buffered by putting the controller into LPM3 and
  *   exiting on capture interrupt
- *
  * */
 int turn_degrees_elv(double degrees) {
 
@@ -181,7 +173,9 @@ int turn_degrees_elv(double degrees) {
     }
 
     if(degrees < 0)  {
+
         ELV_SET_DIRECTION_HOME;
+
     } else {
 
         if(STEPPER_AZM_LIMIT_PUSHED) {
@@ -192,15 +186,12 @@ int turn_degrees_elv(double degrees) {
 
     }
 
-    // calculate number of pulses needed to turn the
-    // desired amount of degrees
-    elv_target_number_of_edges = fabs(degrees) / DEGREES_PER_STEP;
+    elv_target_number_of_steps = fabs(degrees) / DEGREES_PER_STEP;
 
-    if(elv_target_number_of_edges < 3) {
+    if(elv_target_number_of_steps < 5) {
         return 2;
     }
 
-    // start continuous mode
     TA2CTL |= MC__CONTINUOUS;
 
     LPM3;
@@ -210,8 +201,9 @@ int turn_degrees_elv(double degrees) {
 
 
 /*
- * Sets the specified angle on the azimuth plane
- * Starts at
+ * Moves azimuth axis to specified angle
+ *  by stepping the difference between
+ *  'degrees' and the current angle position
  * */
 int azm_set_angle(double degrees) {
 
@@ -233,8 +225,9 @@ int azm_set_angle(double degrees) {
 
 
 /*
- * Sets the current angle on the elevation plane
- * Starts
+ * Moves elevation axis to specified angle
+ *  by stepping the difference between
+ *  'degrees' and the current angle position
  * */
 int elv_set_angle(double degrees) {
 
@@ -271,10 +264,8 @@ int home_azm() {
 
     STEPPER_AZM_WAKE;
 
-    // home direction
     AZM_SET_DIRECTION_HOME;
 
-    // start continuous mode
     TA0CTL |= MC__CONTINUOUS;
 
     LPM3;
@@ -301,10 +292,8 @@ int home_elv() {
 
     STEPPER_ELV_WAKE;
 
-    // home direction
     ELV_SET_DIRECTION_HOME;
 
-    // start continuous mode
     TA2CTL |= MC__CONTINUOUS;
 
     LPM3;
@@ -328,8 +317,6 @@ void azm_home_switch_isrAction() {
 
     azm_current_angle = AZM_HOME_SWITCH_ANGLE;
 
-    //azm_target_number_of_edges = 0;
-
 }
 
 void elv_home_switch_isrAction() {
@@ -342,8 +329,6 @@ void elv_home_switch_isrAction() {
     P2IFG &= ~STEPPER_HOME_BUTTON_BIT;
 
     elv_current_angle = ELV_HOME_SWITCH_ANGLE;
-
-    //elv_target_number_of_edges = 0;
 
 }
 
@@ -360,7 +345,6 @@ void home_button_isrAction() {
  * Handles interrupts from capture compare feed back
  * TA0.1 is for azm PWM
  * Ta0.2 is for elv PWM
- *
  * */
 #pragma vector=TIMER0_A1_VECTOR
 __interrupt void timera0_isr() {
@@ -370,7 +354,7 @@ __interrupt void timera0_isr() {
 
     if (interrupt_vector_value & 0x02) { // Interrupt source: TA0.1 CCIFG
 
-        if(--azm_target_number_of_edges == 0) {
+        if(--azm_target_number_of_steps == 0) {
 
             // turn off Timer A0 to stop rotation
             TA0CTL &= ~MC_3;
@@ -381,7 +365,7 @@ __interrupt void timera0_isr() {
 
     } else if (interrupt_vector_value & 0x04) { // Interrupt source: TA0.2 CCIFG
 
-        if(--elv_target_number_of_edges == 0) {
+        if(--elv_target_number_of_steps == 0) {
 
             // turn off Timer A2 to stop rotation
             TA2CTL &= ~MC_3;

@@ -51,16 +51,16 @@ int main(void)
     /*
      * Initialization
      * */
-
     clock_init();
     port_init();
     i2c_init();
     rtc_init();
     stepper_init();
 
-    // comment this line
-    // if you want to set the date/time
-    // using button P1.1
+    /* Comment this line if you want to
+     * set the date/time using button P1.1
+     * (port1_isr())
+     * */
     RTC_TIMESET_IE &= ~RTC_TIMESET_BIT;
 
     // wait for a bit to settle
@@ -68,17 +68,9 @@ int main(void)
         _delay_cycles(60000);
     }
 
-//    home_elv();
-//    home_azm();
-
-    // debug LED
-    P1DIR |= BIT0;
-    P1SEL &= ~BIT0;
-
     /*
      * Main Loop
      * */
-
     while(1) {
 
         interrupt_handler();
@@ -166,7 +158,6 @@ __interrupt void port2_isr() {
  *  based on value of interruptAction
  *
  * */
-
 void interrupt_handler() {
 
     static uint8_t sleep_flag = 1;
@@ -183,7 +174,7 @@ void interrupt_handler() {
 
         case 2: // second_counter reached calculation_delta_t
 
-            P1OUT |= BIT0;
+            CALC_LED_OUT |= CALC_LED_BIT;
 
             spa_update();
             spa_calculate(&spa);
@@ -212,7 +203,7 @@ void interrupt_handler() {
                 calculation_delta_t = CALCULATION_DELTA_T_NIGHT_MODE;
             }
 
-            P1OUT &= ~BIT0;
+            CALC_LED_OUT &= ~CALC_LED_BIT;
 
             break;
 
@@ -221,7 +212,6 @@ void interrupt_handler() {
     interruptAction = 0;
 
 }
-
 
 
 /*

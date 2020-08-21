@@ -21,6 +21,8 @@ void port_init(void) {
 
     timer_port_init();
 
+    led_init();
+
 }
 
 void stepper_switch_init() {
@@ -161,3 +163,9 @@ void stepper_home_button_init() {
 
 
 }
+
+void led_init() {
+    CALC_LED_DIR |=  CALC_LED_BIT;
+    CALC_LED_OUT &= ~CALC_LED_BIT;
+}
+
