@@ -167,7 +167,7 @@ void interrupt_handler() {
         case 1: // P1.1 Switch, set time/date of RTC module
 
             // year, month, day, hour, minute, second
-            rtc_set_time_date(20, 8, 21, 9, 51, 30);
+            rtc_set_time_date(20, 8, 21, 14, 13, 40);
             rtc_get_time_date(time_date_array);
 
             break;
